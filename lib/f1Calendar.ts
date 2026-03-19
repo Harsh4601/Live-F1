@@ -1,5 +1,3 @@
-import { TRACK_COORDINATES } from "./trackData"
-
 export interface F1Session {
   name: string
   shortName: string
@@ -249,9 +247,3 @@ export function getCurrentOrNextRace(): F1Race {
 
   return F1_2026_CALENDAR[F1_2026_CALENDAR.length - 1]
 }
-
-export function getTrackCoordinates(circuitKey: string): number[][] | null {
-  return TRACK_COORDINATES[circuitKey] ?? null
-}
-
-export { TRACK_COORDINATES }

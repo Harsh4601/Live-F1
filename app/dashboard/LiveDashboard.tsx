@@ -30,8 +30,8 @@ import WeatherWidget from '@/components/WeatherWidget'
 import RaceControlFeed from '@/components/RaceControlFeed'
 import PitStopLog from '@/components/PitStopLog'
 import SessionTabs, { type SessionTab } from '@/components/SessionTabs'
-import TrackMap from '@/components/TrackMap'
 import type { LTSessionInfo } from '@/lib/f1LiveTiming'
+import type { F1Race } from '@/lib/f1Calendar'
 
 interface SessionsPayload {
   meeting: any
@@ -77,9 +77,11 @@ function UpcomingBanner({ sessionInfo }: { sessionInfo: LTSessionInfo }) {
   )
 }
 
-export default function LiveDashboard() {
+export default function LiveDashboard({ race }: { race: F1Race }) {
+  const sessionsUrl = `/api/lt/sessions?slug=${race.slug}`
+
   const { data: weekendData } = useSWR<SessionsPayload>(
-    '/api/lt/sessions',
+    sessionsUrl,
     sessionsFetcher,
     { revalidateOnFocus: false, refreshInterval: 120000 },
   )
@@ -137,10 +139,20 @@ export default function LiveDashboard() {
 
   const activeIndex = selectedIndex ?? defaultIndex
   const activeTab = effectiveSessions[activeIndex] ?? null
-  const isViewingLive = activeTab != null && lt.isActive && (
+
+  // Only treat a session as "live" if:
+  // 1. The live timing feed is actually active (SignalR connected)
+  // 2. The race we are viewing is THIS weekend (not a past race)
+  // 3. The specific tab has an active status — never rely on tab.type === 'Race'
+  //    because that incorrectly marks past Race tabs as live.
+  const isCurrentRace = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0]
+    return race.dateStart <= today && race.dateEnd >= today
+  }, [race])
+
+  const isViewingLive = isCurrentRace && activeTab != null && lt.isActive && (
     activeTab.status === 'Started' ||
-    activeTab.status === 'Ends' ||
-    activeTab.type === 'Race'
+    activeTab.status === 'Ends'
   )
   const isViewingArchive = activeTab != null && !isViewingLive
   const isViewingFinished =
@@ -207,30 +219,28 @@ export default function LiveDashboard() {
       .sort((a, b) => a.position - b.position)
   }, [useOpenF1, openF1Drivers, positions, intervals, laps, stints])
 
-  let session = liveSession
+  // When viewing an archive session, never allow live data from a different race to bleed in.
+  // Use archive data exclusively; fall back to null (loading) until it arrives.
+  let session = isViewingArchive ? (archive.session ?? null) : liveSession
   let leaderboard: LeaderboardEntry[] = []
-  let weather = useOpenF1 ? openF1Weather : lt.weather
-  let raceControl = useOpenF1 ? openF1RaceControl : lt.raceControl
-  let drivers = useOpenF1 ? openF1Drivers : lt.drivers
-  let sourceName = useOpenF1 ? 'OpenF1' : lt.isAvailable ? lt.sourceName : null
+  let weather = isViewingArchive ? archive.weather : (useOpenF1 ? openF1Weather : lt.weather)
+  let raceControl = isViewingArchive ? archive.raceControl : (useOpenF1 ? openF1RaceControl : lt.raceControl)
+  let drivers = isViewingArchive ? archive.drivers : (useOpenF1 ? openF1Drivers : lt.drivers)
+  let sourceName: string | null = isViewingArchive
+    ? 'F1 Live Timing (Archive)'
+    : useOpenF1 ? 'OpenF1' : lt.isAvailable ? lt.sourceName : null
 
-  if (isViewingArchive && archive.session) {
-    session = archive.session
-    leaderboard = archive.leaderboard
-    weather = archive.weather
-    raceControl = archive.raceControl
-    drivers = archive.drivers
-    sourceName = 'F1 Live Timing (Archive)'
-  } else {
+  if (!isViewingArchive) {
     leaderboard = useOpenF1 ? openF1Leaderboard : lt.leaderboard
+  } else if (archive.session) {
+    leaderboard = archive.leaderboard
   }
 
-  const isLoading =
-    weekendSessions.length === 0 && !weekendData
+  const isLoading = isViewingArchive
+    ? archive.isLoading
+    : weekendSessions.length === 0 && !weekendData
       ? !liveSession && (openF1Loading || lt.isLoading)
-      : isViewingArchive
-        ? archive.isLoading
-        : !liveSession && (openF1Loading || lt.isLoading)
+      : !liveSession && (openF1Loading || lt.isLoading)
 
   if (isLoading) {
     return (
@@ -323,13 +333,6 @@ export default function LiveDashboard() {
         </div>
 
         <div className="space-y-6">
-          {leaderboard.length > 0 && (
-            <TrackMap
-              entries={leaderboard}
-              circuitName={session?.circuit_short_name ?? session?.location}
-              lapCount={!isViewingArchive && lt.lapCount && lt.lapCount.total > 0 ? lt.lapCount : undefined}
-            />
-          )}
           <WeatherWidget weather={weather} />
           <RaceControlFeed messages={raceControl} drivers={drivers} />
           {!isViewingArchive && useOpenF1 && (

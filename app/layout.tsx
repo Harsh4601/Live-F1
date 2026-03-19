@@ -24,6 +24,9 @@ const audiowide = Audiowide({
 export const metadata: Metadata = {
   title: 'Live F1 Dashboard',
   description: 'Real-time Formula 1 racing dashboard powered by OpenF1',
+  icons: {
+    icon: '/icon.svg',
+  },
 }
 
 export default function RootLayout({

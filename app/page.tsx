@@ -2,14 +2,18 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import useSWR from 'swr'
+import f1LogoRed from '../f1-logo-red.avif'
 import { F1_2026_CALENDAR, getCurrentOrNextRace, getSessionUTC, type F1Race } from '@/lib/f1Calendar'
-import { getTrackDataByKey, type TrackPoint } from '@/lib/trackCoordinates'
+import { getTrackDataByKey } from '@/lib/trackCoordinates'
+import TrackExploreModal from '@/components/TrackExploreModal'
 
 const fetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null)
 const apiFetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null)
 
 type PageTab = 'calendar' | 'standings'
+
 
 function MiniTrackSVG({ circuitKey, className }: { circuitKey: string; className?: string }) {
   const track = getTrackDataByKey(circuitKey)
@@ -25,7 +29,6 @@ function MiniTrackSVG({ circuitKey, className }: { circuitKey: string; className
   const w = maxX - minX
   const h = maxY - minY
   const pad = Math.max(w, h) * 0.1
-
   const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z'
 
   return (
@@ -142,6 +145,7 @@ function RaceCard({
 }
 
 function RaceDetail({ race, status }: { race: F1Race; status: RaceStatus }) {
+  const [showExplore, setShowExplore] = useState(false)
   const track = getTrackDataByKey(race.circuitKey)
 
   const trackSVG = useMemo(() => {
@@ -229,7 +233,7 @@ function RaceDetail({ race, status }: { race: F1Race; status: RaceStatus }) {
         </div>
       </div>
 
-      {/* Track Map */}
+      {/* Circuit Layout */}
       {trackSVG && (
         <div className="bg-f1-surface rounded-xl border border-f1-border overflow-hidden">
           <div className="px-4 py-3 border-b border-f1-border flex items-center justify-between">
@@ -258,7 +262,22 @@ function RaceDetail({ race, status }: { race: F1Race; status: RaceStatus }) {
               />
             </svg>
           </div>
+          <div className="px-4 pb-4">
+            <button
+              onClick={() => setShowExplore(true)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-f1-red/40 bg-f1-red/5 hover:bg-f1-red/10 hover:border-f1-red/70 text-f1-red text-xs font-bold uppercase tracking-wider transition-all group"
+            >
+              <svg className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+              </svg>
+              Explore Track
+            </button>
+          </div>
         </div>
+      )}
+
+      {showExplore && (
+        <TrackExploreModal race={race} onClose={() => setShowExplore(false)} />
       )}
 
       {/* Session Schedule */}
@@ -614,11 +633,19 @@ export default function CalendarPage() {
     <div className="max-w-[1600px] mx-auto px-4 py-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white">
-            <span className="text-f1-red font-display tracking-wider">F1</span> 2026
-          </h1>
-          <p className="text-f1-muted text-sm mt-0.5">24 Grands Prix &middot; 6 Sprint Weekends</p>
+        <div className="flex items-center gap-3">
+          <Image
+            src={f1LogoRed}
+            alt="Formula 1"
+            className="h-7 w-auto"
+            priority
+          />
+          <div>
+            <h1 className="text-2xl font-bold text-white">
+              <span className="sr-only">F1</span> 2026
+            </h1>
+            <p className="text-f1-muted text-sm mt-0.5">24 Grands Prix &middot; 6 Sprint Weekends</p>
+          </div>
         </div>
       </div>
 

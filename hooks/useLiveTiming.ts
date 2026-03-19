@@ -41,25 +41,14 @@ function ltFetcher<T>(url: string) {
 
 function buildFallbackPath(sessionInfo: LTSessionInfo): string | null {
   try {
-    const pathParts = sessionInfo.Path.replace(/\/$/, '').split('/')
-    if (pathParts.length < 3) return null
-    const meetingBase = pathParts.slice(0, 2).join('/') + '/'
-
-    const raceDate = new Date(sessionInfo.StartDate)
-    const sessionNames = ['Qualifying', 'Sprint_Qualifying', 'Sprint', 'Practice_3', 'Practice_2', 'Practice_1']
-
-    for (let dayOffset = 1; dayOffset <= 3; dayOffset++) {
-      const d = new Date(raceDate)
-      d.setDate(d.getDate() - dayOffset)
-      const dateStr = d.toISOString().split('T')[0]
-      for (const name of sessionNames) {
-        return `${meetingBase}${dateStr}_${name}/`
-      }
-    }
+    // sessionInfo.Path is already the path of the most recent session on the CDN.
+    // Return it directly so the caller can validate whether it's a completed session.
+    const path = sessionInfo.Path
+    if (!path) return null
+    return path.endsWith('/') ? path : path + '/'
   } catch {
-    // ignore
+    return null
   }
-  return null
 }
 
 export function useLiveTiming() {

@@ -1,5 +1,7 @@
 import type { Session, Meeting } from '@/lib/types'
 import { MapPin, Clock, Calendar } from 'lucide-react'
+import Image from 'next/image'
+import f1LogoRed from '../f1-logo-red.avif'
 
 interface RaceHeaderProps {
   session: Session | undefined
@@ -19,9 +21,16 @@ export default function RaceHeader({ session, meeting, isFinished }: RaceHeaderP
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="font-display text-xl md:text-2xl tracking-wider text-f1-red">
-                FORMULA 1
-              </h1>
+              <div className="flex items-center gap-2">
+                <Image
+                  src={f1LogoRed}
+                  alt="Formula 1"
+                  className="h-6 w-auto md:h-7"
+                />
+                <span className="font-display text-sm md:text-base tracking-[0.35em] text-white/80 uppercase">
+                  {session.year}
+                </span>
+              </div>
               {isFinished ? (
                 <span className="flex items-center gap-1.5 bg-white/10 text-white px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border border-white/20">
                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
