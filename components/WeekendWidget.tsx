@@ -72,13 +72,10 @@ export default function WeekendWidget({
 
   const nextSessions = useMemo(() => {
     const now = Date.now()
-    return race.sessions
-      .map((s) => {
-        const utc = getSessionUTC(race.dateStart, s, race.utcOffset)
-        return { ...s, utc, isPast: utc.getTime() < now }
-      })
-      .filter((s) => !s.isPast)
-      .slice(0, 4)
+    return race.sessions.map((s) => {
+      const utc = getSessionUTC(race.dateStart, s, race.utcOffset)
+      return { ...s, utc, isPast: utc.getTime() < now }
+    })
   }, [race])
 
   const liveTickerItems = useMemo(() => {
@@ -140,7 +137,7 @@ export default function WeekendWidget({
       ? { text: 'Live', cls: 'bg-f1-red/20 text-f1-red border-f1-red/30', dot: 'bg-f1-red' }
       : status === 'thisWeekend'
         ? { text: 'This Weekend', cls: 'bg-yellow-400/10 text-yellow-300 border-yellow-400/20', dot: 'bg-yellow-300' }
-        : { text: 'Up Next', cls: 'bg-white/5 text-white/80 border-white/10', dot: 'bg-white/40' }
+        : { text: 'Up Next', cls: 'bg-white/5 text-white/80 border-white/10', dot: 'bg-f1-red' }
 
   return (
     <div className="bg-f1-surface rounded-xl border border-f1-border overflow-hidden mb-6">
@@ -150,7 +147,16 @@ export default function WeekendWidget({
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <span className={`inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${badge.cls}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${badge.dot} ${status === 'live' ? 'animate-pulse-red' : ''}`} />
+                <span className="relative flex h-2 w-2">
+                  {(status === 'live' || status === 'upcoming') && (
+                    <span className={`absolute inline-flex h-full w-full rounded-full opacity-70 ${badge.dot} ${status === 'live' ? 'animate-ping' : 'animate-ping'}`} />
+                  )}
+                  <span
+                    className={`relative inline-flex h-2 w-2 rounded-full ${badge.dot} ${
+                      status === 'live' ? 'animate-pulse-red' : status === 'upcoming' ? 'animate-pulse' : ''
+                    }`}
+                  />
+                </span>
                 {badge.text}
               </span>
               <span className="text-[10px] text-f1-muted font-mono uppercase tracking-wider">
@@ -207,7 +213,12 @@ export default function WeekendWidget({
                   </div>
                 ) : (
                   nextSessions.map((s) => (
-                    <div key={`${s.shortName}-${s.day}`} className="bg-f1-dark/60 border border-white/5 rounded-lg p-3">
+                    <div
+                      key={`${s.shortName}-${s.day}`}
+                      className={`border border-white/5 rounded-lg p-3 transition-colors ${
+                        s.isPast ? 'bg-f1-dark/30 opacity-70' : 'bg-f1-dark/60'
+                      }`}
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="text-[10px] text-f1-muted uppercase tracking-widest">
