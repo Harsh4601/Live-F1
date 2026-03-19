@@ -2,13 +2,13 @@ import { redirect } from 'next/navigation'
 import LiveDashboard from '@/app/dashboard/LiveDashboard'
 
 interface PageProps {
-  params: Promise<{ year: string; round: string }>
+  params: Promise<{ slug: string; round: string }>
 }
 
 const SUPPORTED_YEARS = [2019, 2020, 2021, 2022, 2023, 2024, 2025]
 
 export default async function HistoricalRacePage({ params }: PageProps) {
-  const { year: yearStr, round: roundStr } = await params
+  const { slug: yearStr, round: roundStr } = await params
   const year = Number(yearStr)
   const round = Number(roundStr)
 
