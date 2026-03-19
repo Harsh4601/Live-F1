@@ -235,8 +235,8 @@ function HistoricalCalendarView({ year }: { year: number }) {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6">
-      <div className="space-y-1.5 max-h-[calc(100vh-260px)] overflow-y-auto pr-1 scrollbar-thin">
+    <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6 items-start">
+      <div className="space-y-1.5 sticky top-4 max-h-[calc(100vh-100px)] overflow-y-auto pr-1 scrollbar-thin">
         {races.map((race) => (
           <HistoricalRaceCard
             key={race.round}
@@ -959,8 +959,8 @@ export default function CalendarPage() {
       ) : isHistoricalYear ? (
         <HistoricalCalendarView year={selectedYear} />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6">
-          <div className="space-y-1.5 max-h-[calc(100vh-260px)] overflow-y-auto pr-1 scrollbar-thin">
+        <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6 items-start">
+          <div className="space-y-1.5 sticky top-4 max-h-[calc(100vh-100px)] overflow-y-auto pr-1 scrollbar-thin">
             {F1_2026_CALENDAR.map((race) => (
               <RaceCard
                 key={race.round}
