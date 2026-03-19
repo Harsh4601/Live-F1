@@ -563,18 +563,19 @@ interface ConstructorStanding {
   }
 }
 
-function StandingsView() {
+function StandingsView({ year }: { year?: number }) {
   const [tab, setTab] = useState<StandingsTab>('drivers')
+  const apiYear = year ?? 'current'
 
   const { data: driverData, isLoading: driversLoading } = useSWR(
-    'https://api.jolpi.ca/ergast/f1/current/driverstandings.json',
+    `https://api.jolpi.ca/ergast/f1/${apiYear}/driverstandings.json`,
     apiFetcher,
-    { revalidateOnFocus: false, refreshInterval: 300000 }
+    { revalidateOnFocus: false, refreshInterval: year ? 0 : 300000 }
   )
   const { data: constructorData, isLoading: constructorsLoading } = useSWR(
-    'https://api.jolpi.ca/ergast/f1/current/constructorstandings.json',
+    `https://api.jolpi.ca/ergast/f1/${apiYear}/constructorstandings.json`,
     apiFetcher,
-    { revalidateOnFocus: false, refreshInterval: 300000 }
+    { revalidateOnFocus: false, refreshInterval: year ? 0 : 300000 }
   )
 
   const driverStandings: DriverStanding[] =
@@ -608,9 +609,11 @@ function StandingsView() {
         ))}
       </div>
 
-      {season && seasonRound && (
+      {season && (
         <p className="text-f1-muted text-xs font-mono">
-          After Round {seasonRound} &middot; {season} Season
+          {year
+            ? `Final Standings · ${season} Season`
+            : `After Round ${seasonRound} · ${season} Season`}
         </p>
       )}
 
@@ -625,7 +628,7 @@ function StandingsView() {
         <div className="bg-f1-surface rounded-xl border border-f1-border overflow-hidden">
           <div className="px-4 py-3 border-b border-f1-border">
             <h3 className="text-sm font-bold uppercase tracking-widest text-white/80">
-              Driver Standings
+              {year ? `${year} Driver Standings` : 'Driver Standings'}
             </h3>
           </div>
           {driverStandings.length === 0 ? (
@@ -697,7 +700,7 @@ function StandingsView() {
         <div className="bg-f1-surface rounded-xl border border-f1-border overflow-hidden">
           <div className="px-4 py-3 border-b border-f1-border">
             <h3 className="text-sm font-bold uppercase tracking-widest text-white/80">
-              Constructor Standings
+              {year ? `${year} Constructor Standings` : 'Constructor Standings'}
             </h3>
           </div>
           {constructorStandings.length === 0 ? (
@@ -820,6 +823,7 @@ export default function CalendarPage() {
               onChange={(e) => {
                 setSelectedYear(Number(e.target.value))
                 setSelectedRound(currentRace.round)
+                setPageTab('calendar')
               }}
               className="appearance-none bg-f1-surface border border-f1-border text-white text-sm font-bold font-mono rounded-lg pl-4 pr-8 py-2 cursor-pointer hover:border-f1-red/50 transition-colors focus:outline-none focus:border-f1-red"
             >
@@ -836,34 +840,34 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Page tabs — only shown for current year (standings are 2026 only) */}
-      {!isHistoricalYear && (
-        <div className="flex items-center gap-1 mb-6">
-          {([
-            { id: 'calendar' as PageTab, label: 'Calendar' },
-            { id: 'standings' as PageTab, label: 'Standings' },
-          ]).map(t => (
-            <button
-              key={t.id}
-              onClick={() => setPageTab(t.id)}
-              className={`relative px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-                pageTab === t.id
-                  ? 'bg-f1-surface text-white border border-f1-red/60'
-                  : 'text-f1-muted hover:text-white hover:bg-f1-surface/50 border border-transparent'
-              }`}
-            >
-              {t.label}
-              {pageTab === t.id && (
-                <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-f1-red rounded-full" />
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Page tabs — Calendar + Standings for all years */}
+      <div className="flex items-center gap-1 mb-6">
+        {([
+          { id: 'calendar' as PageTab, label: 'Calendar' },
+          { id: 'standings' as PageTab, label: 'Standings' },
+        ]).map(t => (
+          <button
+            key={t.id}
+            onClick={() => setPageTab(t.id)}
+            className={`relative px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+              pageTab === t.id
+                ? 'bg-f1-surface text-white border border-f1-red/60'
+                : 'text-f1-muted hover:text-white hover:bg-f1-surface/50 border border-transparent'
+            }`}
+          >
+            {t.label}
+            {pageTab === t.id && (
+              <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-f1-red rounded-full" />
+            )}
+          </button>
+        ))}
+      </div>
 
-      {isHistoricalYear ? (
+      {pageTab === 'standings' ? (
+        <StandingsView year={isHistoricalYear ? selectedYear : undefined} />
+      ) : isHistoricalYear ? (
         <HistoricalCalendarView year={selectedYear} />
-      ) : pageTab === 'calendar' ? (
+      ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6">
           <div className="space-y-1.5 max-h-[calc(100vh-260px)] overflow-y-auto pr-1 scrollbar-thin">
             {F1_2026_CALENDAR.map((race) => (
@@ -880,8 +884,6 @@ export default function CalendarPage() {
             <RaceDetail race={selectedRace} status={selectedStatus} />
           </div>
         </div>
-      ) : (
-        <StandingsView />
       )}
     </div>
   )
