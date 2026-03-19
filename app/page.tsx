@@ -12,6 +12,166 @@ import TrackExploreModal from '@/components/TrackExploreModal'
 const fetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null)
 const apiFetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null)
 
+const CURRENT_YEAR = 2026
+const SUPPORTED_YEARS = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019]
+
+const COUNTRY_FLAGS: Record<string, string> = {
+  'Australia': '🇦🇺', 'China': '🇨🇳', 'Japan': '🇯🇵',
+  'Bahrain': '🇧🇭', 'Saudi Arabia': '🇸🇦',
+  'United States': '🇺🇸', 'USA': '🇺🇸',
+  'Canada': '🇨🇦', 'Monaco': '🇲🇨', 'Spain': '🇪🇸',
+  'Austria': '🇦🇹', 'United Kingdom': '🇬🇧', 'UK': '🇬🇧',
+  'Belgium': '🇧🇪', 'Hungary': '🇭🇺', 'Netherlands': '🇳🇱',
+  'Italy': '🇮🇹', 'Singapore': '🇸🇬', 'Azerbaijan': '🇦🇿',
+  'Mexico': '🇲🇽', 'Brazil': '🇧🇷',
+  'United Arab Emirates': '🇦🇪', 'UAE': '🇦🇪',
+  'Qatar': '🇶🇦', 'France': '🇫🇷', 'Russia': '🇷🇺',
+  'Germany': '🇩🇪', 'Portugal': '🇵🇹', 'Turkey': '🇹🇷',
+  'Vietnam': '🇻🇳',
+}
+
+function countryFlag(country: string): string {
+  return COUNTRY_FLAGS[country] ?? '🏁'
+}
+
+interface ErgastRace {
+  round: string
+  raceName: string
+  Circuit: { circuitName: string; Location: { locality: string; country: string } }
+  date: string
+}
+
+// ─── Historical calendar (non-2026 years from Ergast) ───
+
+function HistoricalRaceCard({
+  race,
+  isSelected,
+  onSelect,
+}: {
+  race: ErgastRace
+  isSelected: boolean
+  onSelect: () => void
+}) {
+  const flag = countryFlag(race.Circuit.Location.country)
+  const dateLabel = new Date(race.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+
+  return (
+    <button
+      onClick={onSelect}
+      className={`w-full text-left rounded-xl border transition-all p-3 group ${
+        isSelected
+          ? 'bg-f1-red/10 border-f1-red/60 ring-1 ring-f1-red/30'
+          : 'bg-f1-surface border-f1-border hover:border-f1-red/40'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <div className="text-[11px] font-mono font-bold w-7 text-center text-f1-red">
+          R{String(race.round).padStart(2, '0')}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-base">{flag}</span>
+            <span className="text-sm font-bold text-white truncate">
+              {race.Circuit.Location.locality}
+            </span>
+          </div>
+          <div className="text-[11px] font-mono text-f1-muted">{dateLabel}</div>
+        </div>
+      </div>
+    </button>
+  )
+}
+
+function HistoricalRaceDetail({ race, year }: { race: ErgastRace; year: number }) {
+  const flag = countryFlag(race.Circuit.Location.country)
+  const raceDate = new Date(race.date + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  })
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-f1-surface rounded-xl border border-f1-border overflow-hidden">
+        <div className="h-1 bg-gradient-to-r from-f1-red via-f1-red/50 to-transparent" />
+        <div className="p-6">
+          <div className="flex items-start justify-between flex-wrap gap-4">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <span className="text-2xl">{flag}</span>
+                <span className="text-f1-red text-xs font-mono font-bold uppercase tracking-wider">
+                  Round {race.round} · {year}
+                </span>
+              </div>
+              <h2 className="text-2xl font-bold text-white">{race.raceName}</h2>
+              <p className="text-f1-muted text-sm mt-1">
+                {race.Circuit.circuitName} &middot; {race.Circuit.Location.locality}
+              </p>
+              <p className="text-f1-muted text-xs mt-1 font-mono">{raceDate}</p>
+            </div>
+            <Link
+              href={`/${year}/${race.round}`}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider bg-f1-dark hover:bg-f1-border text-white border border-f1-border transition-all flex-shrink-0"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7" />
+              </svg>
+              View Results
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function HistoricalCalendarView({ year }: { year: number }) {
+  const { data, isLoading } = useSWR(
+    `https://api.jolpi.ca/ergast/f1/${year}/races.json`,
+    apiFetcher,
+    { revalidateOnFocus: false },
+  )
+  const races: ErgastRace[] = data?.MRData?.RaceTable?.Races ?? []
+  const [selectedRound, setSelectedRound] = useState<string>('1')
+
+  // Auto-select first race on year change or data load
+  useMemo(() => {
+    if (races.length > 0) setSelectedRound(races[0].round)
+  }, [year, races.length])
+
+  const selectedRace = races.find((r) => r.round === selectedRound) ?? races[0]
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="w-10 h-10 border-4 border-f1-border border-t-f1-red rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!races.length) {
+    return (
+      <div className="text-center py-24 text-f1-muted">No race data found for {year}</div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6">
+      <div className="space-y-1.5 max-h-[calc(100vh-260px)] overflow-y-auto pr-1 scrollbar-thin">
+        {races.map((race) => (
+          <HistoricalRaceCard
+            key={race.round}
+            race={race}
+            isSelected={race.round === selectedRound}
+            onSelect={() => setSelectedRound(race.round)}
+          />
+        ))}
+      </div>
+      <div>
+        {selectedRace && <HistoricalRaceDetail race={selectedRace} year={year} />}
+      </div>
+    </div>
+  )
+}
+
 type PageTab = 'calendar' | 'standings'
 
 
@@ -606,6 +766,7 @@ function StandingsView() {
 
 export default function CalendarPage() {
   const currentRace = getCurrentOrNextRace()
+  const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR)
   const [selectedRound, setSelectedRound] = useState(currentRace.round)
   const [pageTab, setPageTab] = useState<PageTab>('calendar')
   const selectedRace = F1_2026_CALENDAR.find((r) => r.round === selectedRound) ?? currentRace
@@ -629,50 +790,80 @@ export default function CalendarPage() {
 
   const selectedStatus = getStatusForRace(selectedRace)
 
+  const isHistoricalYear = selectedYear !== CURRENT_YEAR
+
   return (
     <div className="max-w-[1600px] mx-auto px-4 py-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <Image
-            src={f1LogoRed}
-            alt="Formula 1"
-            className="h-7 w-auto"
-            priority
-          />
+          <Image src={f1LogoRed} alt="Formula 1" className="h-7 w-auto" priority />
           <div>
             <h1 className="text-2xl font-bold text-white">
-              <span className="sr-only">F1</span> 2026
+              <span className="sr-only">F1</span>{' '}
+              {selectedYear === CURRENT_YEAR ? '2026' : selectedYear}
             </h1>
-            <p className="text-f1-muted text-sm mt-0.5">24 Grands Prix &middot; 6 Sprint Weekends</p>
+            <p className="text-f1-muted text-sm mt-0.5">
+              {selectedYear === CURRENT_YEAR
+                ? '24 Grands Prix · 6 Sprint Weekends'
+                : `${selectedYear} Formula 1 Season`}
+            </p>
+          </div>
+        </div>
+
+        {/* Year selector */}
+        <div className="flex items-center gap-2">
+          <span className="text-f1-muted text-xs font-mono uppercase tracking-wider">Season</span>
+          <div className="relative">
+            <select
+              value={selectedYear}
+              onChange={(e) => {
+                setSelectedYear(Number(e.target.value))
+                setSelectedRound(currentRace.round)
+              }}
+              className="appearance-none bg-f1-surface border border-f1-border text-white text-sm font-bold font-mono rounded-lg pl-4 pr-8 py-2 cursor-pointer hover:border-f1-red/50 transition-colors focus:outline-none focus:border-f1-red"
+            >
+              {SUPPORTED_YEARS.map((y) => (
+                <option key={y} value={y} className="bg-f1-dark">
+                  {y}{y === CURRENT_YEAR ? ' (Current)' : ''}
+                </option>
+              ))}
+            </select>
+            <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-f1-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
           </div>
         </div>
       </div>
 
-      {/* Page tabs */}
-      <div className="flex items-center gap-1 mb-6">
-        {([
-          { id: 'calendar' as PageTab, label: 'Calendar' },
-          { id: 'standings' as PageTab, label: 'Standings' },
-        ]).map(t => (
-          <button
-            key={t.id}
-            onClick={() => setPageTab(t.id)}
-            className={`relative px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-              pageTab === t.id
-                ? 'bg-f1-surface text-white border border-f1-red/60'
-                : 'text-f1-muted hover:text-white hover:bg-f1-surface/50 border border-transparent'
-            }`}
-          >
-            {t.label}
-            {pageTab === t.id && (
-              <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-f1-red rounded-full" />
-            )}
-          </button>
-        ))}
-      </div>
+      {/* Page tabs — only shown for current year (standings are 2026 only) */}
+      {!isHistoricalYear && (
+        <div className="flex items-center gap-1 mb-6">
+          {([
+            { id: 'calendar' as PageTab, label: 'Calendar' },
+            { id: 'standings' as PageTab, label: 'Standings' },
+          ]).map(t => (
+            <button
+              key={t.id}
+              onClick={() => setPageTab(t.id)}
+              className={`relative px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                pageTab === t.id
+                  ? 'bg-f1-surface text-white border border-f1-red/60'
+                  : 'text-f1-muted hover:text-white hover:bg-f1-surface/50 border border-transparent'
+              }`}
+            >
+              {t.label}
+              {pageTab === t.id && (
+                <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-f1-red rounded-full" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {pageTab === 'calendar' ? (
+      {isHistoricalYear ? (
+        <HistoricalCalendarView year={selectedYear} />
+      ) : pageTab === 'calendar' ? (
         <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6">
           <div className="space-y-1.5 max-h-[calc(100vh-260px)] overflow-y-auto pr-1 scrollbar-thin">
             {F1_2026_CALENDAR.map((race) => (

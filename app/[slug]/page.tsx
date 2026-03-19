@@ -153,5 +153,11 @@ export default async function RaceDashboardPage({ params }: PageProps) {
     return <UpcomingRacePage race={race} />
   }
 
-  return <LiveDashboard race={race} />
+  return (
+    <LiveDashboard
+      sessionsApiUrl={`/api/lt/sessions?slug=${race.slug}`}
+      dateStart={race.dateStart}
+      dateEnd={race.dateEnd}
+    />
+  )
 }

@@ -31,7 +31,6 @@ import RaceControlFeed from '@/components/RaceControlFeed'
 import PitStopLog from '@/components/PitStopLog'
 import SessionTabs, { type SessionTab } from '@/components/SessionTabs'
 import type { LTSessionInfo } from '@/lib/f1LiveTiming'
-import type { F1Race } from '@/lib/f1Calendar'
 
 interface SessionsPayload {
   meeting: any
@@ -77,11 +76,25 @@ function UpcomingBanner({ sessionInfo }: { sessionInfo: LTSessionInfo }) {
   )
 }
 
-export default function LiveDashboard({ race }: { race: F1Race }) {
-  const sessionsUrl = `/api/lt/sessions?slug=${race.slug}`
+interface LiveDashboardProps {
+  /** Pre-built sessions API URL, e.g. /api/lt/sessions?slug=australia */
+  sessionsApiUrl: string
+  /** Weekend start date (YYYY-MM-DD) — used to decide if this race is live */
+  dateStart: string
+  /** Weekend end date / race day (YYYY-MM-DD) */
+  dateEnd: string
+  /** True for races from previous seasons — disables OpenF1 & live-timing checks */
+  isHistorical?: boolean
+}
 
+export default function LiveDashboard({
+  sessionsApiUrl,
+  dateStart,
+  dateEnd,
+  isHistorical = false,
+}: LiveDashboardProps) {
   const { data: weekendData } = useSWR<SessionsPayload>(
-    sessionsUrl,
+    sessionsApiUrl,
     sessionsFetcher,
     { revalidateOnFocus: false, refreshInterval: 120000 },
   )
@@ -104,7 +117,8 @@ export default function LiveDashboard({ race }: { race: F1Race }) {
   const { data: sessions, error: openF1Error, isLoading: openF1Loading } = useLatestSession()
   const openF1Locked = openF1Error instanceof OpenF1LockedError || (openF1Error && !sessions)
   const lt = useLiveTiming()
-  const useOpenF1 = !openF1Locked && !!sessions?.[0]
+  // Disable OpenF1 for historical races — it always returns the latest session, not historical ones
+  const useOpenF1 = !isHistorical && !openF1Locked && !!sessions?.[0]
 
   const liveIndex = useMemo(() => {
     if (!lt.isActive || lt.isFinished) return null
@@ -141,14 +155,14 @@ export default function LiveDashboard({ race }: { race: F1Race }) {
   const activeTab = effectiveSessions[activeIndex] ?? null
 
   // Only treat a session as "live" if:
-  // 1. The live timing feed is actually active (SignalR connected)
-  // 2. The race we are viewing is THIS weekend (not a past race)
-  // 3. The specific tab has an active status — never rely on tab.type === 'Race'
-  //    because that incorrectly marks past Race tabs as live.
+  // 1. This is not a historical (past-season) race
+  // 2. The race weekend dates bracket today
+  // 3. The live timing feed is active and the tab has an active status
   const isCurrentRace = useMemo(() => {
+    if (isHistorical) return false
     const today = new Date().toISOString().split('T')[0]
-    return race.dateStart <= today && race.dateEnd >= today
-  }, [race])
+    return dateStart <= today && dateEnd >= today
+  }, [isHistorical, dateStart, dateEnd])
 
   const isViewingLive = isCurrentRace && activeTab != null && lt.isActive && (
     activeTab.status === 'Started' ||

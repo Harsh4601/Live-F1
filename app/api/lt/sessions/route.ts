@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { F1_2026_CALENDAR } from '@/lib/f1Calendar'
 
 const LT_BASE = 'https://livetiming.formula1.com/static'
+const ERGAST_BASE = 'https://api.jolpi.ca/ergast/f1'
 
 interface DiscoveredSession {
   name: string
@@ -11,9 +12,6 @@ interface DiscoveredSession {
   startDate: string
 }
 
-// dayOffsets relative to Race day (0).
-// Sprint weekends: P1 + Sprint Qualifying on day 1 (offset -2), Sprint + Qualifying on day 2 (-1).
-// We probe both -2 and -1 for ambiguous sessions so the correct one is found regardless of format.
 const SESSION_TEMPLATES = [
   { name: 'Practice 1',        type: 'Practice',          suffix: 'Practice_1',        tryOffsets: [-2, -1] },
   { name: 'Practice 2',        type: 'Practice',          suffix: 'Practice_2',        tryOffsets: [-2, -1] },
@@ -26,19 +24,15 @@ const SESSION_TEMPLATES = [
 
 export const dynamic = 'force-dynamic'
 
-// Normalise a race name to the underscore format F1 CDN uses in folder names.
-// e.g. "Australian Grand Prix" → "Australian_Grand_Prix"
-//      "São Paulo Grand Prix"  → "Sao_Paulo_Grand_Prix"
 function normaliseMeetingName(name: string): string {
   return name
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // strip diacritics (ã → a, é → e, etc.)
-    .replace(/[^a-zA-Z0-9\s]/g, '')  // remove non-alphanumeric
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, '')
     .trim()
     .replace(/\s+/g, '_')
 }
 
-// Probe one session template across all its candidate day-offsets in parallel.
 async function probeTemplate(
   meetingBase: string,
   raceDate: Date,
@@ -71,18 +65,49 @@ async function probeTemplate(
   return results.find(Boolean) ?? null
 }
 
-// Derive meeting base + race date from a calendar slug.
+// Build meeting info from our 2026 calendar slug
 function meetingInfoFromSlug(slug: string): { meetingBase: string; raceDate: Date } | null {
   const race = F1_2026_CALENDAR.find((r) => r.slug === slug)
   if (!race) return null
   const year = race.dateEnd.split('-')[0]
-  const meetingName = normaliseMeetingName(race.name)
-  const meetingBase = `${year}/${race.dateEnd}_${meetingName}/`
-  const raceDate = new Date(race.dateEnd + 'T12:00:00Z')
-  return { meetingBase, raceDate }
+  const meetingBase = `${year}/${race.dateEnd}_${normaliseMeetingName(race.name)}/`
+  return { meetingBase, raceDate: new Date(race.dateEnd + 'T12:00:00Z') }
 }
 
-// Derive meeting base + race date from the live CDN SessionInfo.json.
+// Build meeting info from Ergast API (historical races)
+async function meetingInfoFromErgast(
+  year: string,
+  round: string,
+): Promise<{ meetingBase: string; raceDate: Date; meeting: any } | null> {
+  try {
+    const res = await fetch(`${ERGAST_BASE}/${year}/${round}/races.json`, {
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const race = data?.MRData?.RaceTable?.Races?.[0]
+    if (!race) return null
+
+    const raceDateStr: string = race.date // e.g. "2024-03-02"
+    const meetingName = normaliseMeetingName(race.raceName)
+    const meetingBase = `${year}/${raceDateStr}_${meetingName}/`
+
+    return {
+      meetingBase,
+      raceDate: new Date(raceDateStr + 'T12:00:00Z'),
+      meeting: {
+        Name: race.raceName,
+        Location: race.Circuit?.Location?.locality,
+        Country: race.Circuit?.Location?.country,
+        Circuit: race.Circuit?.circuitName,
+      },
+    }
+  } catch {
+    return null
+  }
+}
+
+// Fall back to whatever the CDN is currently serving
 async function meetingInfoFromCDN(): Promise<{
   meetingBase: string
   raceDate: Date
@@ -95,13 +120,11 @@ async function meetingInfoFromCDN(): Promise<{
   const pathParts = meetingPath.replace(/\/$/, '').split('/')
   const meetingBase = pathParts.slice(0, 2).join('/') + '/'
 
-  // The meeting folder prefix IS the race date on the F1 CDN.
   const meetingFolderDate = pathParts[1]?.split('_')[0] ?? ''
   const raceDateFromPath = meetingFolderDate.match(/^\d{4}-\d{2}-\d{2}$/)
     ? new Date(meetingFolderDate + 'T12:00:00Z')
     : null
 
-  // Fallback: adjust sessionInfo.StartDate based on the current session type.
   const currentSessionFolder = pathParts[2] ?? ''
   let raceDateFallback = new Date(sessionInfo.StartDate)
   if (currentSessionFolder.includes('Practice_1') || currentSessionFolder.includes('Practice_2')) {
@@ -123,43 +146,60 @@ async function meetingInfoFromCDN(): Promise<{
 
 export async function GET(request: NextRequest) {
   try {
-    const slug = request.nextUrl.searchParams.get('slug')
+    const params = request.nextUrl.searchParams
+    const slug  = params.get('slug')
+    const year  = params.get('year')
+    const round = params.get('round')
 
     let meetingBase: string
     let raceDate: Date
     let meeting: any = null
 
-    if (slug) {
-      // Specific race requested — build path from calendar data.
-      const info = meetingInfoFromSlug(slug)
-      if (!info) {
-        return NextResponse.json({ sessions: [] }, { status: 404 })
-      }
+    if (year && round) {
+      // Historical race — fetch from Ergast
+      const info = await meetingInfoFromErgast(year, round)
+      if (!info) return NextResponse.json({ sessions: [] }, { status: 502 })
       meetingBase = info.meetingBase
-      raceDate = info.raceDate
+      raceDate    = info.raceDate
+      meeting     = info.meeting
 
-      // Also try to get the meeting metadata from CDN for the header (best-effort).
+      // Also try to enrich meeting metadata from CDN (best-effort)
       try {
-        const cdnInfo = await fetch(`${LT_BASE}/${meetingBase}SessionInfo.json`, {
+        const cdnRes = await fetch(`${LT_BASE}/${meetingBase}SessionInfo.json`, {
           signal: AbortSignal.timeout(4000),
         })
-        if (cdnInfo.ok) {
-          const si = await cdnInfo.json()
-          meeting = si.Meeting
+        if (cdnRes.ok) {
+          const si = await cdnRes.json()
+          meeting = si.Meeting ?? meeting
         }
-      } catch { /* ignore — meeting metadata is non-critical */ }
+      } catch { /* non-critical */ }
+
+    } else if (slug) {
+      // 2026 race — derive from local calendar
+      const info = meetingInfoFromSlug(slug)
+      if (!info) return NextResponse.json({ sessions: [] }, { status: 404 })
+      meetingBase = info.meetingBase
+      raceDate    = info.raceDate
+
+      try {
+        const cdnRes = await fetch(`${LT_BASE}/${meetingBase}SessionInfo.json`, {
+          signal: AbortSignal.timeout(4000),
+        })
+        if (cdnRes.ok) {
+          const si = await cdnRes.json()
+          meeting = si.Meeting ?? meeting
+        }
+      } catch { /* non-critical */ }
+
     } else {
-      // No slug — fall back to whatever the CDN is currently serving.
+      // No slug/year — serve whatever CDN is currently showing
       const cdnInfo = await meetingInfoFromCDN()
-      if (!cdnInfo) {
-        return NextResponse.json({ sessions: [] }, { status: 502 })
-      }
+      if (!cdnInfo) return NextResponse.json({ sessions: [] }, { status: 502 })
       meetingBase = cdnInfo.meetingBase
-      raceDate = cdnInfo.raceDate
-      meeting = cdnInfo.meeting
+      raceDate    = cdnInfo.raceDate
+      meeting     = cdnInfo.meeting
     }
 
-    // Probe all session templates in parallel.
     const probes = SESSION_TEMPLATES.map((tmpl) => probeTemplate(meetingBase, raceDate, tmpl))
     const results = await Promise.all(probes)
     const sessions = (results.filter(Boolean) as DiscoveredSession[]).sort(
