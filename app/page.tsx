@@ -8,6 +8,7 @@ import f1LogoRed from '../f1-logo-red.avif'
 import { F1_2026_CALENDAR, getCurrentOrNextRace, getSessionUTC, type F1Race } from '@/lib/f1Calendar'
 import { getTrackDataByKey, getTrackData, getResolvedTrackKey } from '@/lib/trackCoordinates'
 import TrackExploreModal, { type TrackInfo } from '@/components/TrackExploreModal'
+import WeekendWidget from '@/components/WeekendWidget'
 
 const fetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null)
 const apiFetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null)
@@ -912,7 +913,7 @@ export default function CalendarPage() {
             >
               {SUPPORTED_YEARS.map((y) => (
                 <option key={y} value={y} className="bg-f1-dark">
-                  {y}{y === CURRENT_YEAR ? ' (Current)' : ''}
+                  {y}
                 </option>
               ))}
             </select>
@@ -922,6 +923,13 @@ export default function CalendarPage() {
           </div>
         </div>
       </div>
+
+      {!isHistoricalYear && (
+        <WeekendWidget
+          race={currentRace}
+          status={getStatusForRace(currentRace)}
+        />
+      )}
 
       {/* Page tabs — Calendar + Standings for all years */}
       <div className="flex items-center gap-1 mb-6">
