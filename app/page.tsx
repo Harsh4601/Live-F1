@@ -6,7 +6,7 @@ import Image from 'next/image'
 import useSWR from 'swr'
 import f1LogoRed from '../f1-logo-red.avif'
 import { F1_2026_CALENDAR, getCurrentOrNextRace, getSessionUTC, type F1Race } from '@/lib/f1Calendar'
-import { getTrackDataByKey } from '@/lib/trackCoordinates'
+import { getTrackDataByKey, getTrackData } from '@/lib/trackCoordinates'
 import TrackExploreModal from '@/components/TrackExploreModal'
 
 const fetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null)
@@ -88,8 +88,28 @@ function HistoricalRaceDetail({ race, year }: { race: ErgastRace; year: number }
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   })
 
+  // Resolve track using locality name (e.g. "Melbourne", "Baku") via the alias resolver
+  const track = useMemo(
+    () => getTrackData(race.Circuit.Location.locality) ?? getTrackData(race.Circuit.circuitName),
+    [race.Circuit.Location.locality, race.Circuit.circuitName],
+  )
+
+  const trackSVG = useMemo(() => {
+    if (!track) return null
+    const pts = track.points
+    const xs = pts.map((p) => p.x)
+    const ys = pts.map((p) => p.y)
+    const minX = Math.min(...xs), maxX = Math.max(...xs)
+    const minY = Math.min(...ys), maxY = Math.max(...ys)
+    const w = maxX - minX, h = maxY - minY
+    const pad = Math.max(w, h) * 0.1
+    const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z'
+    return { viewBox: `${minX - pad} ${minY - pad} ${w + pad * 2} ${h + pad * 2}`, d, sw: Math.max(w, h) * 0.015 }
+  }, [track])
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="bg-f1-surface rounded-xl border border-f1-border overflow-hidden">
         <div className="h-1 bg-gradient-to-r from-f1-red via-f1-red/50 to-transparent" />
         <div className="p-6">
@@ -119,6 +139,38 @@ function HistoricalRaceDetail({ race, year }: { race: ErgastRace; year: number }
           </div>
         </div>
       </div>
+
+      {/* Circuit Layout */}
+      {trackSVG && (
+        <div className="bg-f1-surface rounded-xl border border-f1-border overflow-hidden">
+          <div className="px-4 py-3 border-b border-f1-border flex items-center justify-between">
+            <h3 className="text-sm font-bold uppercase tracking-widest text-white/80">Circuit Layout</h3>
+            <span className="text-[10px] text-f1-muted font-mono uppercase">{race.Circuit.circuitName}</span>
+          </div>
+          <div className="p-4">
+            <svg viewBox={trackSVG.viewBox} className="w-full max-h-[300px]" preserveAspectRatio="xMidYMid meet">
+              <path
+                d={trackSVG.d}
+                fill="none"
+                stroke="#E10600"
+                strokeWidth={trackSVG.sw}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                opacity={0.8}
+              />
+              <path
+                d={trackSVG.d}
+                fill="none"
+                stroke="#E10600"
+                strokeWidth={trackSVG.sw * 3}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                opacity={0.1}
+              />
+            </svg>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -387,7 +439,7 @@ function RaceDetail({ race, status }: { race: F1Race; status: RaceStatus }) {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7" />
               </svg>
-              {status === 'live' ? 'Live Dashboard' : 'Dashboard'}
+              {status === 'live' ? 'Live Dashboard' : status === 'past' ? 'View Results' : 'Dashboard'}
             </Link>
           </div>
         </div>
