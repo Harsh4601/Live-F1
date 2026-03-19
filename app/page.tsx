@@ -6,8 +6,8 @@ import Image from 'next/image'
 import useSWR from 'swr'
 import f1LogoRed from '../f1-logo-red.avif'
 import { F1_2026_CALENDAR, getCurrentOrNextRace, getSessionUTC, type F1Race } from '@/lib/f1Calendar'
-import { getTrackDataByKey, getTrackData } from '@/lib/trackCoordinates'
-import TrackExploreModal from '@/components/TrackExploreModal'
+import { getTrackDataByKey, getTrackData, getResolvedTrackKey } from '@/lib/trackCoordinates'
+import TrackExploreModal, { type TrackInfo } from '@/components/TrackExploreModal'
 
 const fetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null)
 const apiFetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null)
@@ -83,6 +83,7 @@ function HistoricalRaceCard({
 }
 
 function HistoricalRaceDetail({ race, year }: { race: ErgastRace; year: number }) {
+  const [showExplore, setShowExplore] = useState(false)
   const flag = countryFlag(race.Circuit.Location.country)
   const raceDate = new Date(race.date + 'T12:00:00').toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -93,6 +94,16 @@ function HistoricalRaceDetail({ race, year }: { race: ErgastRace; year: number }
     () => getTrackData(race.Circuit.Location.locality) ?? getTrackData(race.Circuit.circuitName),
     [race.Circuit.Location.locality, race.Circuit.circuitName],
   )
+
+  // Resolved key for TrackExploreModal (same keys used by TRACK_META)
+  const resolvedKey = useMemo(
+    () => getResolvedTrackKey(race.Circuit.Location.locality) ?? getResolvedTrackKey(race.Circuit.circuitName),
+    [race.Circuit.Location.locality, race.Circuit.circuitName],
+  )
+
+  const exploreInfo: TrackInfo | null = resolvedKey
+    ? { circuitKey: resolvedKey, circuitName: race.Circuit.circuitName, flag, city: race.Circuit.Location.locality, country: race.Circuit.Location.country }
+    : null
 
   const trackSVG = useMemo(() => {
     if (!track) return null
@@ -169,7 +180,24 @@ function HistoricalRaceDetail({ race, year }: { race: ErgastRace; year: number }
               />
             </svg>
           </div>
+          {exploreInfo && (
+            <div className="px-4 pb-4">
+              <button
+                onClick={() => setShowExplore(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-f1-red/40 bg-f1-red/5 hover:bg-f1-red/10 hover:border-f1-red/70 text-f1-red text-xs font-bold uppercase tracking-wider transition-all group"
+              >
+                <svg className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                </svg>
+                Explore Track
+              </button>
+            </div>
+          )}
         </div>
+      )}
+
+      {showExplore && exploreInfo && (
+        <TrackExploreModal info={exploreInfo} onClose={() => setShowExplore(false)} />
       )}
     </div>
   )
@@ -489,7 +517,10 @@ function RaceDetail({ race, status }: { race: F1Race; status: RaceStatus }) {
       )}
 
       {showExplore && (
-        <TrackExploreModal race={race} onClose={() => setShowExplore(false)} />
+        <TrackExploreModal
+          info={{ circuitKey: race.circuitKey, circuitName: race.circuitName, flag: race.flag, city: race.city, country: race.country }}
+          onClose={() => setShowExplore(false)}
+        />
       )}
 
       {/* Session Schedule */}

@@ -106,6 +106,10 @@ function resolveCircuitKey(input?: string): string | null {
   return null
 }
 
+export function getResolvedTrackKey(input?: string): string | null {
+  return resolveCircuitKey(input)
+}
+
 export function getTrackData(circuitName?: string): TrackData | null {
   const key = resolveCircuitKey(circuitName)
   if (!key) return null

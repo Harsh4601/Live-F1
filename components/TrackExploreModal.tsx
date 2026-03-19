@@ -3,7 +3,14 @@
 import { useMemo, useEffect } from 'react'
 import { getTrackDataByKey } from '@/lib/trackCoordinates'
 import { TRACK_META } from '@/lib/trackMeta'
-import type { F1Race } from '@/lib/f1Calendar'
+
+export interface TrackInfo {
+  circuitKey: string
+  circuitName: string
+  flag: string
+  city: string
+  country: string
+}
 
 function StatCard({
   label,
@@ -33,14 +40,14 @@ function StatCard({
 }
 
 export default function TrackExploreModal({
-  race,
+  info,
   onClose,
 }: {
-  race: F1Race
+  info: TrackInfo
   onClose: () => void
 }) {
-  const track = getTrackDataByKey(race.circuitKey)
-  const meta = TRACK_META[race.circuitKey] ?? null
+  const track = getTrackDataByKey(info.circuitKey)
+  const meta = TRACK_META[info.circuitKey] ?? null
 
   // Close on Escape key
   useEffect(() => {
@@ -102,11 +109,11 @@ export default function TrackExploreModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-f1-border">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">{race.flag}</span>
+            <span className="text-3xl">{info.flag}</span>
             <div>
-              <h2 className="text-white font-bold text-lg leading-tight">{race.circuitName}</h2>
+              <h2 className="text-white font-bold text-lg leading-tight">{info.circuitName}</h2>
               <p className="text-f1-muted text-xs font-mono mt-0.5">
-                {race.city} &middot; {race.country}
+                {info.city} &middot; {info.country}
               </p>
             </div>
           </div>
